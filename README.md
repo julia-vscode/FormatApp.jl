@@ -8,6 +8,17 @@ By default `juliaformat` rewrites files in place. The formatting style and
 options are read from the nearest `juliaformat.toml` configuration file; when no
 configuration is found the `minimal` style is used.
 
+## Installation
+
+`juliaformat` is distributed as a Julia app. Install it with the `app` command in the package REPL:
+
+```
+pkg> app add https://github.com/julia-vscode/JuliaFormat.jl
+```
+
+This installs the `juliaformat` executable and makes it available on your
+`PATH`.
+
 ## Usage
 
 ```
