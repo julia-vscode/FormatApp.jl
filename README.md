@@ -1,5 +1,10 @@
 # JuliaFormat.jl
 
+> [!WARNING]
+> **JuliaFormat is beta software.** It is still under active development, may be
+> unstable, and everything described here — including commands, options, output,
+> and the configuration format — is subject to change without notice.
+
 `juliaformat` is a command line source code formatter for Julia. It exposes the
 formatting capabilities of [JuliaWorkspaces.jl](https://github.com/julia-vscode/JuliaWorkspaces.jl)
 as a standalone app, and is a companion to [JuliaLint.jl](https://github.com/julia-vscode/JuliaLint.jl).
