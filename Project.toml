@@ -10,8 +10,8 @@ Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [compat]
 ArgParse = "1.2.0"
-JuliaWorkspaces = "7"
+JuliaWorkspaces = "8"
 Logging = "1.11.0"
-julia = "1.10"
+julia = "1.11"
 
 [apps.juliaformat]
