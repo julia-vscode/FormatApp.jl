@@ -186,7 +186,6 @@ function _run(ARGS)
     parsed_args === nothing && return 0  # --help / --version handled by ArgParse
 
     # --- Logging ---
-    ENV["JULIA_LOAD_PATH"] = ";"
     log_level = parsed_args["log"]
     if log_level == "debug"
         global_logger(ConsoleLogger(stderr, Logging.Debug))
@@ -229,7 +228,8 @@ function _run(ARGS)
 
     file_set = Set(_norm.(files))
 
-    jw = workspace_from_folders(folders, dynamic=JuliaWorkspaces.DynamicIndexingOnly, symbolcache_download=false)
+    # Formatting is purely syntactic, so no dynamic environment analysis is needed.
+    jw = workspace_from_folders(folders)
 
     # Collect the URIs of Julia files that the user actually requested.
     target_uris = filter(uri -> begin
