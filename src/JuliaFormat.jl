@@ -323,4 +323,31 @@ end
 
 (@main)(ARGS) = _run(ARGS)
 
+# ---------------------------------------------------------------------------
+# Precompile workload
+# ---------------------------------------------------------------------------
+
+using PrecompileTools: @setup_workload, @compile_workload
+
+@setup_workload begin
+    workload_dir = mktempdir()
+    write(joinpath(workload_dir, "script.jl"), """
+    x=1+ 2
+    function  f( a,b )
+      a+ b
+    end
+    """)
+
+    @compile_workload begin
+        parse_commandline(String[])
+        redirect_stdout(devnull) do
+            redirect_stderr(devnull) do
+                _run([workload_dir, "--check"])
+                _run([workload_dir, "--diff"])
+                _run([workload_dir, "--list"])
+            end
+        end
+    end
+end
+
 end # module JuliaFormat
