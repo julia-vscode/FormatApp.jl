@@ -145,7 +145,7 @@ end
 function parse_commandline(ARGS)
     s = ArgParseSettings(
         prog = "juliaformat",
-        description = "juliaformat — a source code formatter for Julia. By default it rewrites files in place. Formatting style and options are read from the nearest juliaformat.toml configuration file.",
+        description = "juliaformat — a source code formatter for Julia. By default it rewrites files in place. Formatting style and options are read from the nearest JuliaFormat.toml configuration file, which also selects which files are formatted at all.",
         version = _VERSION,
         add_version = true,
     )
@@ -250,9 +250,18 @@ function _run(ARGS)
     n_reformatted = 0
     n_unchanged   = 0
     n_errors      = 0
+    n_skipped     = 0
 
     for uri in target_uris
         path = JuliaWorkspaces.uri2filepath(uri)
+
+        # A file the configuration excludes is skipped, not an error — walking a
+        # directory routinely turns up files the user has opted out of.
+        if JuliaWorkspaces.is_format_excluded(jw, uri)
+            n_skipped += 1
+            @debug "skipping excluded file" path
+            continue
+        end
 
         local edit
         try
@@ -302,12 +311,14 @@ function _run(ARGS)
         n_reformatted > 0 && push!(parts, "$n_reformatted reformatted")
         n_unchanged   > 0 && push!(parts, "$n_unchanged unchanged")
         n_errors      > 0 && push!(parts, "$n_errors error$(n_errors == 1 ? "" : "s")")
+        n_skipped     > 0 && push!(parts, "$n_skipped excluded")
         isempty(parts) || println(stderr, join(parts, ", "))
     elseif check
+        skipped_note = n_skipped > 0 ? ", $n_skipped excluded" : ""
         if n_reformatted > 0
-            println(stderr, "$n_reformatted file$(n_reformatted == 1 ? "" : "s") would be reformatted, $n_unchanged already formatted")
+            println(stderr, "$n_reformatted file$(n_reformatted == 1 ? "" : "s") would be reformatted, $n_unchanged already formatted", skipped_note)
         else
-            println(stderr, "all $n_unchanged file$(n_unchanged == 1 ? "" : "s") already formatted")
+            println(stderr, "all $n_unchanged file$(n_unchanged == 1 ? "" : "s") already formatted", skipped_note)
         end
     end
 
