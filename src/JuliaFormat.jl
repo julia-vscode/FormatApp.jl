@@ -159,7 +159,7 @@ function parse_commandline(ARGS)
             help = "rewrite files in place (the default behavior)"
             action = :store_true
         "--check"
-            help = "do not write files; exit with code 1 if any file is not formatted"
+            help = "do not write files; exit with code 1 if any file is not formatted (combine with --diff to also print the changes)"
             action = :store_true
         "--diff", "-d"
             help = "do not write files; print a unified diff of the changes"
@@ -195,20 +195,23 @@ function _run(ARGS)
         global_logger(ConsoleLogger(stderr, Logging.Warn))
     end
 
-    # --- Mode selection (mutually exclusive) ---
+    # --- Mode selection ---
     check = parsed_args["check"]::Bool
     diff  = parsed_args["diff"]::Bool
     list  = parsed_args["list"]::Bool
     write = parsed_args["write"]::Bool
 
-    n_modes = count(identity, (check, diff, list))
-    if n_modes > 1
+    # `--check --diff` is a supported combination (the diff is printed and the
+    # exit code reports whether anything would change — the shape CI wants, and
+    # what Black/cargo-fmt/ruff all offer). `--list` composes with neither:
+    # with `--check` it is redundant, with `--diff` the outputs interleave.
+    if list && (check || diff)
         printstyled(stderr, "error", color=:red, bold=true)
-        println(stderr, ": --check, --diff and --list are mutually exclusive")
+        println(stderr, ": --list cannot be combined with --check or --diff")
         return 2
     end
     # Default mode is write-in-place. --write is an explicit synonym.
-    write = write || n_modes == 0
+    write = write || !(check || diff || list)
 
     # --- Targets ---
     raw_paths = parsed_args["path"]::Vector{String}

@@ -46,7 +46,10 @@ used.
 | `--version` | Print the version and exit. |
 | `-h`, `--help` | Print help and exit. |
 
-`--check`, `--diff` and `--list` are mutually exclusive.
+`--check` may be combined with `--diff`: the diff is printed and the exit code
+reports whether anything would change, which is the shape a CI job wants.
+`--list` composes with neither (with `--check` it is redundant, with `--diff`
+the outputs would interleave).
 
 ### Examples
 
@@ -60,7 +63,10 @@ juliaformat src/MyModule.jl
 # Fail (exit code 1) if anything is unformatted — useful in CI
 juliaformat --check src/
 
-# Show what would change without writing
+# The CI sweet spot: fail AND show the changes in the log
+juliaformat --check --diff .
+
+# Show what would change without writing (always exits 0)
 juliaformat --diff src/
 
 # List the files that would be reformatted
