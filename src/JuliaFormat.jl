@@ -145,7 +145,7 @@ end
 function parse_commandline(ARGS)
     s = ArgParseSettings(
         prog = "juliaformat",
-        description = "juliaformat — a source code formatter for Julia. By default it rewrites files in place. Formatting style and options are read from the nearest juliaformat.toml configuration file.",
+        description = "juliaformat — a source code formatter for Julia. By default it rewrites files in place. Formatting style and options are read from the nearest JuliaFormat.toml configuration file, which also selects which files are formatted at all.",
         version = _VERSION,
         add_version = true,
     )
@@ -159,7 +159,7 @@ function parse_commandline(ARGS)
             help = "rewrite files in place (the default behavior)"
             action = :store_true
         "--check"
-            help = "do not write files; exit with code 1 if any file is not formatted"
+            help = "do not write files; exit with code 1 if any file is not formatted (combine with --diff to also print the changes)"
             action = :store_true
         "--diff", "-d"
             help = "do not write files; print a unified diff of the changes"
@@ -195,20 +195,23 @@ function _run(ARGS)
         global_logger(ConsoleLogger(stderr, Logging.Warn))
     end
 
-    # --- Mode selection (mutually exclusive) ---
+    # --- Mode selection ---
     check = parsed_args["check"]::Bool
     diff  = parsed_args["diff"]::Bool
     list  = parsed_args["list"]::Bool
     write = parsed_args["write"]::Bool
 
-    n_modes = count(identity, (check, diff, list))
-    if n_modes > 1
+    # `--check --diff` is a supported combination (the diff is printed and the
+    # exit code reports whether anything would change — the shape CI wants, and
+    # what Black/cargo-fmt/ruff all offer). `--list` composes with neither:
+    # with `--check` it is redundant, with `--diff` the outputs interleave.
+    if list && (check || diff)
         printstyled(stderr, "error", color=:red, bold=true)
-        println(stderr, ": --check, --diff and --list are mutually exclusive")
+        println(stderr, ": --list cannot be combined with --check or --diff")
         return 2
     end
     # Default mode is write-in-place. --write is an explicit synonym.
-    write = write || n_modes == 0
+    write = write || !(check || diff || list)
 
     # --- Targets ---
     raw_paths = parsed_args["path"]::Vector{String}
@@ -250,9 +253,18 @@ function _run(ARGS)
     n_reformatted = 0
     n_unchanged   = 0
     n_errors      = 0
+    n_skipped     = 0
 
     for uri in target_uris
         path = JuliaWorkspaces.uri2filepath(uri)
+
+        # A file the configuration excludes is skipped, not an error — walking a
+        # directory routinely turns up files the user has opted out of.
+        if JuliaWorkspaces.is_format_excluded(jw, uri)
+            n_skipped += 1
+            @debug "skipping excluded file" path
+            continue
+        end
 
         local edit
         try
@@ -302,12 +314,14 @@ function _run(ARGS)
         n_reformatted > 0 && push!(parts, "$n_reformatted reformatted")
         n_unchanged   > 0 && push!(parts, "$n_unchanged unchanged")
         n_errors      > 0 && push!(parts, "$n_errors error$(n_errors == 1 ? "" : "s")")
+        n_skipped     > 0 && push!(parts, "$n_skipped excluded")
         isempty(parts) || println(stderr, join(parts, ", "))
     elseif check
+        skipped_note = n_skipped > 0 ? ", $n_skipped excluded" : ""
         if n_reformatted > 0
-            println(stderr, "$n_reformatted file$(n_reformatted == 1 ? "" : "s") would be reformatted, $n_unchanged already formatted")
+            println(stderr, "$n_reformatted file$(n_reformatted == 1 ? "" : "s") would be reformatted, $n_unchanged already formatted", skipped_note)
         else
-            println(stderr, "all $n_unchanged file$(n_unchanged == 1 ? "" : "s") already formatted")
+            println(stderr, "all $n_unchanged file$(n_unchanged == 1 ? "" : "s") already formatted", skipped_note)
         end
     end
 
