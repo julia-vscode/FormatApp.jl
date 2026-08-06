@@ -91,10 +91,16 @@ workspace (the name is matched case-insensitively).
 settings are *not* merged across files. Keys it does not set take their built-in
 defaults, never a value from a file further up the tree.
 
+A single `JuliaFormat.toml` at the project root should be your default. When
+part of the tree needs different settings, use an `[[override]]` block in that
+one file rather than a second config file — a nested file is a last resort, for
+a subtree that is genuinely independent of the project, such as a vendored
+repository.
+
 Because a nested config *replaces* rather than extends the one above it, a
-`JuliaFormat.toml` with another in an enclosing directory reports a
-`shadowed_config` warning naming the file it takes over from — the linter's
-`shadowed_config` rule controls it.
+`JuliaFormat.toml` with another in an enclosing directory reports an
+informational `shadowed_config` diagnostic naming the file it takes over from —
+the linter's `shadowed_config` rule controls it.
 
 ### Top-level keys
 
