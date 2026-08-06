@@ -85,10 +85,16 @@ workspace (the name is matched case-insensitively).
 settings are *not* merged across files. Keys it does not set take their built-in
 defaults, never a value from a file further up the tree.
 
+Because a nested config *replaces* rather than extends the one above it, a
+`JuliaFormat.toml` with another in an enclosing directory reports a
+`shadowed_config` warning naming the file it takes over from — the linter's
+`shadowed_config` rule controls it.
+
 ### Top-level keys
 
 | Key | Default | Description |
 | --- | --- | --- |
+| `config-version` | `1` | The config format version. Absent means `1`. |
 | `style` | `"minimal"` | The style preset: `default`, `yas`, `blue`, `sciml`, `minimal` or `runic`. |
 | `include` | all `.jl` files | Glob patterns selecting the files to format. |
 | `exclude` | none | Glob patterns excluding files from formatting. Wins over `include`. |
