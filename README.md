@@ -32,7 +32,12 @@ juliaformat [options] [path...]
 
 `path` may be one or more files or directories. Directories are searched
 recursively for Julia files. When no path is given, the current directory is
-used.
+used. A single `-` reads source code from stdin instead (see below).
+
+When a file is named explicitly, the governing `JuliaFormat.toml` is looked up
+in the file's directory and its ancestors (stopping at a `.git` directory), so
+a repository-root configuration applies even when formatting one file deep in
+the tree.
 
 ### Options
 
@@ -42,6 +47,7 @@ used.
 | `--check` | Do not write files; exit with code `1` if any file is not formatted. |
 | `-d`, `--diff` | Do not write files; print a unified diff of the changes. |
 | `-l`, `--list` | Do not write files; list the files that would be reformatted. |
+| `--stdin-filename PATH` | With `-`: the path the stdin content nominally comes from. |
 | `--log LEVEL` | Set the log level (`debug` or `info`); warnings and errors are always shown. |
 | `--version` | Print the version and exit. |
 | `-h`, `--help` | Print help and exit. |
@@ -49,7 +55,25 @@ used.
 `--check` may be combined with `--diff`: the diff is printed and the exit code
 reports whether anything would change, which is the shape a CI job wants.
 `--list` composes with neither (with `--check` it is redundant, with `--diff`
-the outputs would interleave).
+the outputs would interleave). `--write` cannot be combined with any of the
+no-write modes.
+
+### stdin
+
+`juliaformat -` reads Julia source from stdin and prints the formatted result
+to stdout, which is what editor and tooling integrations want. `--check` and
+`--diff` work as for files; `--write` and `--list` do not apply.
+
+Without further arguments the built-in defaults (the `minimal` style) are
+used — no configuration file is consulted. Pass `--stdin-filename PATH` to
+format the input as if it were that file: the governing `JuliaFormat.toml` is
+discovered from `PATH`, including its `include`/`exclude` globs (input from an
+excluded file passes through unchanged), and diffs are labeled with it.
+
+```sh
+echo 'foo( 1,2 )' | juliaformat -
+juliaformat - --stdin-filename src/MyModule.jl < src/MyModule.jl
+```
 
 ### Examples
 

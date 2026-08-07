@@ -1,6 +1,6 @@
 name = "JuliaFormatApp"
 uuid = "335f3e5c-9abb-47b5-a2f9-4e51f56c5ccb"
-version = "0.1.0"
+version = "0.2.0-DEV"
 authors = ["David Anthoff <anthoff@berkeley.edu>"]
 
 [deps]
@@ -11,9 +11,15 @@ PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 
 [compat]
 ArgParse = "1.2.0"
-JuliaWorkspaces = "10"
+JuliaWorkspaces = "11"
 Logging = "1.11.0"
 PrecompileTools = "1.2"
 julia = "1.12"
 
 [apps.juliaformat]
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

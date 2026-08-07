@@ -16,87 +16,7 @@ const _GREEN = "\e[32m"
 const _CYAN  = "\e[36m"
 const _DIM   = "\e[2m"
 
-# ---------------------------------------------------------------------------
-# Unified diff (line based, LCS) — no external dependency
-# ---------------------------------------------------------------------------
-
-function _split_lines(s::AbstractString)
-    lines = split(s, '\n')
-    if !isempty(lines) && last(lines) == "" && endswith(s, '\n')
-        pop!(lines)
-    end
-    return lines
-end
-
-# Longest common subsequence table over two vectors of lines.
-function _lcs_table(a::Vector{<:AbstractString}, b::Vector{<:AbstractString})
-    n, m = length(a), length(b)
-    dp = zeros(Int, n + 1, m + 1)
-    for i in n:-1:1
-        for j in m:-1:1
-            dp[i, j] = a[i] == b[j] ? dp[i + 1, j + 1] + 1 : max(dp[i + 1, j], dp[i, j + 1])
-        end
-    end
-    return dp
-end
-
-# Produce a list of (op, line) tuples where op is :keep, :del or :add.
-function _diff_ops(a::Vector{<:AbstractString}, b::Vector{<:AbstractString})
-    dp = _lcs_table(a, b)
-    ops = Tuple{Symbol,String}[]
-    i, j = 1, 1
-    n, m = length(a), length(b)
-    while i <= n && j <= m
-        if a[i] == b[j]
-            push!(ops, (:keep, String(a[i])))
-            i += 1; j += 1
-        elseif dp[i + 1, j] >= dp[i, j + 1]
-            push!(ops, (:del, String(a[i])))
-            i += 1
-        else
-            push!(ops, (:add, String(b[j])))
-            j += 1
-        end
-    end
-    while i <= n
-        push!(ops, (:del, String(a[i]))); i += 1
-    end
-    while j <= m
-        push!(ops, (:add, String(b[j]))); j += 1
-    end
-    return ops
-end
-
-"""
-    _print_diff(io, path, original, formatted, use_color)
-
-Print a git-style unified diff between `original` and `formatted` for `path`.
-"""
-function _print_diff(io::IO, path::AbstractString, original::AbstractString, formatted::AbstractString, use_color::Bool)
-    a = _split_lines(original)
-    b = _split_lines(formatted)
-    ops = _diff_ops(a, b)
-
-    header_a = "--- $path (original)"
-    header_b = "+++ $path (formatted)"
-    if use_color
-        println(io, _BOLD, header_a, _RESET)
-        println(io, _BOLD, header_b, _RESET)
-    else
-        println(io, header_a)
-        println(io, header_b)
-    end
-
-    for (op, line) in ops
-        if op === :del
-            use_color ? println(io, _RED, "-", line, _RESET) : println(io, "-", line)
-        elseif op === :add
-            use_color ? println(io, _GREEN, "+", line, _RESET) : println(io, "+", line)
-        else
-            use_color ? println(io, _DIM, " ", line, _RESET) : println(io, " ", line)
-        end
-    end
-end
+include("diff.jl")
 
 # ---------------------------------------------------------------------------
 # Target discovery
@@ -125,6 +45,28 @@ end
 # Normalize a path for comparison across separators / casing on Windows.
 _norm(p::AbstractString) = lowercase(replace(abspath(p), '\\' => '/'))
 
+# Directory whose `JuliaFormat.toml` governs `file_path`: walk up from the
+# file's directory until a config file is found. A `.git` directory bounds the
+# search (a config above the repository root should not apply), as does the
+# filesystem root. Without this, formatting a single explicitly named file
+# (or stdin) would miss a config sitting in an ancestor directory.
+function _config_anchor_folder(file_path::AbstractString)
+    dir = dirname(abspath(file_path))
+    cur = dir
+    while true
+        has_config = try
+            any(f -> lowercase(f) == "juliaformat.toml", readdir(cur))
+        catch
+            false
+        end
+        has_config && return cur
+        isdir(joinpath(cur, ".git")) && return dir
+        parent = dirname(cur)
+        parent == cur && return dir
+        cur = parent
+    end
+end
+
 # Decide whether a workspace file (given as an absolute path) was requested by
 # the user, either directly as a file or because it lives under a target folder.
 function _is_requested(path::AbstractString, dirs::Vector{String}, files::Set{String})
@@ -152,7 +94,7 @@ function parse_commandline(ARGS)
 
     @add_arg_table! s begin
         "path"
-            help = "files or directories to format (defaults to current directory)"
+            help = "files or directories to format (defaults to current directory); a single `-` reads source from stdin and prints the result to stdout"
             arg_type = String
             nargs = '*'
         "--write", "-w"
@@ -167,6 +109,10 @@ function parse_commandline(ARGS)
         "--list", "-l"
             help = "do not write files; list the files that would be reformatted"
             action = :store_true
+        "--stdin-filename"
+            help = "with `-`: the path the stdin content nominally comes from, used to locate the governing JuliaFormat.toml and to label diffs"
+            arg_type = String
+            metavar = "PATH"
         "--log"
             help = "set log level (debug or info); warn/error always shown"
             arg_type = String
@@ -175,6 +121,62 @@ function parse_commandline(ARGS)
     end
 
     return parse_args(ARGS, s)
+end
+
+# ---------------------------------------------------------------------------
+# stdin mode
+# ---------------------------------------------------------------------------
+
+# Format the text arriving on stdin. Default: print the formatted source to
+# stdout. `--check` exits 1 when the input is not formatted; `--diff` prints a
+# unified diff. `stdin_filename`, when given, anchors JuliaFormat.toml
+# discovery (including include/exclude) and labels check/diff output.
+function _run_stdin(check::Bool, diff::Bool, stdin_filename)
+    text = read(stdin, String)
+
+    local jw, uri, label
+    if stdin_filename !== nothing
+        ap = abspath(stdin_filename)
+        label = stdin_filename
+        jw = workspace_from_folders([_config_anchor_folder(ap)])
+        uri = JuliaWorkspaces.filepath2uri(ap)
+        file = TextFile(uri, SourceText(text, "julia"))
+        # The file may or may not exist on disc under the anchor folder; the
+        # stdin content wins either way.
+        has_file(jw, uri) ? JuliaWorkspaces.update_file!(jw, file) : add_file!(jw, file)
+    else
+        # No filename: no config discovery, the built-in defaults apply.
+        label = "<stdin>"
+        jw = JuliaWorkspace()
+        uri = JuliaWorkspaces.filepath2uri(joinpath(pwd(), "__juliaformat_stdin__.jl"))
+        add_file!(jw, TextFile(uri, SourceText(text, "julia")))
+    end
+
+    edit = try
+        get_format_edits(jw, uri)
+    catch err
+        printstyled(stderr, "error", color=:red, bold=true)
+        println(stderr, ": failed to format ", label, ": ", sprint(showerror, err))
+        return 1
+    end
+
+    if edit === nothing
+        # Excluded by configuration: the input passes through untouched.
+        check || diff || print(stdout, text)
+        return 0
+    end
+
+    formatted = isempty(edit.edits) ? text : edit.edits[1].new_text
+    changed = formatted != text
+
+    if check || diff
+        diff && changed && _print_diff(stdout, label, text, formatted, stdout isa Base.TTY)
+        check && changed && println(stderr, "would reformat ", label)
+        return (check && changed) ? 1 : 0
+    end
+
+    print(stdout, formatted)
+    return 0
 end
 
 # ---------------------------------------------------------------------------
@@ -200,11 +202,18 @@ function _run(ARGS)
     diff  = parsed_args["diff"]::Bool
     list  = parsed_args["list"]::Bool
     write = parsed_args["write"]::Bool
+    stdin_filename = parsed_args["stdin-filename"]
 
     # `--check --diff` is a supported combination (the diff is printed and the
     # exit code reports whether anything would change — the shape CI wants, and
     # what Black/cargo-fmt/ruff all offer). `--list` composes with neither:
     # with `--check` it is redundant, with `--diff` the outputs interleave.
+    # An explicit `--write` contradicts every no-write mode.
+    if write && (check || diff || list)
+        printstyled(stderr, "error", color=:red, bold=true)
+        println(stderr, ": --write cannot be combined with --check, --diff or --list")
+        return 2
+    end
     if list && (check || diff)
         printstyled(stderr, "error", color=:red, bold=true)
         println(stderr, ": --list cannot be combined with --check or --diff")
@@ -215,17 +224,39 @@ function _run(ARGS)
 
     # --- Targets ---
     raw_paths = parsed_args["path"]::Vector{String}
+
+    # --- stdin mode ---
+    if "-" in raw_paths
+        if length(raw_paths) != 1
+            printstyled(stderr, "error", color=:red, bold=true)
+            println(stderr, ": `-` (stdin) cannot be combined with other paths")
+            return 2
+        end
+        if parsed_args["write"]::Bool || list
+            printstyled(stderr, "error", color=:red, bold=true)
+            println(stderr, ": --write and --list are not supported with `-` (stdin)")
+            return 2
+        end
+        return _run_stdin(check, diff, stdin_filename)
+    end
+    if stdin_filename !== nothing
+        printstyled(stderr, "error", color=:red, bold=true)
+        println(stderr, ": --stdin-filename requires reading from stdin via `-`")
+        return 2
+    end
+
     isempty(raw_paths) && (raw_paths = [pwd()])
 
     classified = _classify_targets(raw_paths)
     classified === nothing && return 1
     dirs, files = classified
 
-    # Build a workspace covering all requested directories plus the parent
-    # folders of any explicitly requested files.
+    # Build a workspace covering all requested directories plus, for any
+    # explicitly requested file, the directory of its governing
+    # JuliaFormat.toml (so a config in an ancestor directory is honored).
     folders = copy(dirs)
     for f in files
-        push!(folders, dirname(f))
+        push!(folders, _config_anchor_folder(f))
     end
     unique!(folders)
 
@@ -273,6 +304,13 @@ function _run(ARGS)
             n_errors += 1
             printstyled(stderr, "error", color=:red, bold=true)
             println(stderr, ": failed to format ", path, ": ", sprint(showerror, err))
+            continue
+        end
+
+        # `nothing` means the configuration excludes the file (the
+        # is_format_excluded pre-check above normally catches this already).
+        if edit === nothing
+            n_skipped += 1
             continue
         end
 
