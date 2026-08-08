@@ -2,11 +2,9 @@ module JuliaFormatApp
 
 using JuliaWorkspaces, ArgParse, Logging
 
-const _VERSION = let
-    proj = joinpath(dirname(@__DIR__), "Project.toml")
-    m = match(r"^version\s*=\s*\"([^\"]+)\""m, read(proj, String))
-    m === nothing ? "0.0.0" : String(m[1])
-end
+# pkgversion (not a Project.toml read) so this keeps working for an installed
+# app, where `../Project.toml` need not exist on disc.
+const _VERSION = string(@something(pkgversion(@__MODULE__), v"0.0.0"))
 
 # ANSI colors (used only when writing to a TTY)
 const _RESET = "\e[0m"
@@ -131,8 +129,8 @@ end
 # stdout. `--check` exits 1 when the input is not formatted; `--diff` prints a
 # unified diff. `stdin_filename`, when given, anchors JuliaFormat.toml
 # discovery (including include/exclude) and labels check/diff output.
-function _run_stdin(check::Bool, diff::Bool, stdin_filename)
-    text = read(stdin, String)
+function _run_stdin(check::Bool, diff::Bool, stdin_filename; input::IO=stdin)
+    text = read(input, String)
 
     local jw, uri, label
     if stdin_filename !== nothing
@@ -382,12 +380,31 @@ end
 using PrecompileTools: @setup_workload, @compile_workload
 
 @setup_workload begin
-    workload_dir = mktempdir()
-    write(joinpath(workload_dir, "script.jl"), """
+    badly_formatted = """
     x=1+ 2
     function  f( a,b )
       a+ b
     end
+    """
+
+    workload_dir = mktempdir()
+    script_path = joinpath(workload_dir, "script.jl")
+    write(script_path, badly_formatted)
+
+    # Separate directory for the write-in-place mode so the read-only modes
+    # above keep operating on unformatted input.
+    write_dir = mktempdir()
+    write(joinpath(write_dir, "script.jl"), badly_formatted)
+
+    # Subfolder configured for Runic so the app-side dispatch into the second
+    # formatter backend is compiled too.
+    runic_dir = mktempdir()
+    write(joinpath(runic_dir, "JuliaFormat.toml"), """
+    style = "runic"
+    """)
+    write(joinpath(runic_dir, "runic_file.jl"), """
+    g(x)=x^ 2
+    z  = g( 3 )
     """)
 
     @compile_workload begin
@@ -397,6 +414,15 @@ using PrecompileTools: @setup_workload, @compile_workload
                 _run([workload_dir, "--check"])
                 _run([workload_dir, "--diff"])
                 _run([workload_dir, "--list"])
+                _run([runic_dir, "--check"])
+                # Default mode: rewrite files in place.
+                _run([write_dir])
+                # stdin mode, with and without a nominal filename. Called via
+                # the handler directly: the precompile process has no real
+                # stdin to redirect on Windows.
+                _run_stdin(true, false, script_path; input=IOBuffer(badly_formatted))
+                _run_stdin(false, true, nothing; input=IOBuffer(badly_formatted))
+                _run_stdin(false, false, nothing; input=IOBuffer(badly_formatted))
             end
         end
     end
