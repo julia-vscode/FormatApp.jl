@@ -1,7 +1,7 @@
 @testmodule CLIHelper begin
-    using JuliaFormatApp
+    using FormatApp
 
-    # Run JuliaFormatApp._run with captured stdout/stderr, returning
+    # Run FormatApp._run with captured stdout/stderr, returning
     # (exit_code, stdout::String, stderr::String). Optionally feeds `input` as stdin.
     function run_cli(args::Vector{String}; input::Union{Nothing,String}=nothing)
         out_path, out_io = mktemp()
@@ -9,13 +9,13 @@
         local code
         try
             if input === nothing
-                code = redirect_stdio(() -> JuliaFormatApp._run(args); stdout=out_io, stderr=err_io)
+                code = redirect_stdio(() -> FormatApp._run(args); stdout=out_io, stderr=err_io)
             else
                 in_path, in_io = mktemp()
                 write(in_io, input)
                 close(in_io)
                 open(in_path) do in_stream
-                    code = redirect_stdio(() -> JuliaFormatApp._run(args); stdout=out_io, stderr=err_io, stdin=in_stream)
+                    code = redirect_stdio(() -> FormatApp._run(args); stdout=out_io, stderr=err_io, stdin=in_stream)
                 end
             end
         finally

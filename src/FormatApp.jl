@@ -1,4 +1,4 @@
-module JuliaFormatApp
+module FormatApp
 
 using JuliaWorkspaces, ArgParse, Logging
 
@@ -428,4 +428,4 @@ using PrecompileTools: @setup_workload, @compile_workload
     end
 end
 
-end # module JuliaFormatApp
+end # module FormatApp

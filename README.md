@@ -1,13 +1,13 @@
-# JuliaFormatApp.jl
+# FormatApp.jl
 
 > [!WARNING]
-> **JuliaFormatApp is beta software.** It is still under active development, may be
+> **FormatApp is beta software.** It is still under active development, may be
 > unstable, and everything described here — including commands, options, output,
 > and the configuration format — is subject to change without notice.
 
 `juliaformat` is a command line source code formatter for Julia. It exposes the
 formatting capabilities of [JuliaWorkspaces.jl](https://github.com/julia-vscode/JuliaWorkspaces.jl)
-as a standalone app, and is a companion to [JuliaLintApp.jl](https://github.com/julia-vscode/JuliaLintApp.jl).
+as a standalone app, and is a companion to [LintApp.jl](https://github.com/julia-vscode/LintApp.jl).
 
 By default `juliaformat` rewrites files in place. The formatting style and
 options are read from the nearest `JuliaFormat.toml` configuration file; when no
@@ -18,7 +18,7 @@ configuration is found the `minimal` style is used.
 `juliaformat` is distributed as a Julia app. Install it with the `app` command in the package REPL:
 
 ```
-pkg> app add https://github.com/julia-vscode/JuliaFormatApp.jl
+pkg> app add https://github.com/julia-vscode/FormatApp.jl
 ```
 
 This installs the `juliaformat` executable and makes it available on your
