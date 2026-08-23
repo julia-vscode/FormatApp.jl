@@ -261,7 +261,14 @@ function _run(ARGS)
     file_set = Set(_norm.(files))
 
     # Formatting is purely syntactic, so no dynamic environment analysis is needed.
-    jw = workspace_from_folders(folders)
+    #
+    # When only directories were named, scope the folder walk to `JuliaFormat.toml`
+    # so a subtree its globs exclude is never read from disc — the point of the
+    # config file is that those files are not ours to format. Explicitly named
+    # files are walked unscoped, so naming an excluded file still reports it as
+    # excluded rather than as "no Julia files found".
+    scope = isempty(files) ? :format : nothing
+    jw = workspace_from_folders(folders; scope=scope)
 
     # Collect the URIs of Julia files that the user actually requested.
     target_uris = filter(uri -> begin

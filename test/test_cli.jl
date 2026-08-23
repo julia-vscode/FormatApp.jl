@@ -91,8 +91,14 @@ end
 
     code, _, err = run_cli(["--check", dir])
     @test code == 0
-    @test occursin("1 excluded", err)
     @test read(excluded, String) == MESSY
+
+    # The folder walk is scoped to `JuliaFormat.toml`, so `gen/` is never read
+    # from disc at all — which is the point, on a tree whose excluded
+    # directories hold most of the files. The excluded file is therefore not
+    # reported as excluded either; only `b.jl` was ever a candidate.
+    @test occursin("1 file", err)
+    @test !occursin("error", err)
 end
 
 @testitem "config anchor found from a file target in a subdirectory" setup=[CLIHelper] begin
