@@ -15,14 +15,15 @@ configuration is found the `minimal` style is used.
 
 ## Installation
 
-`juliaformat` is distributed as a Julia app. Install it with the `app` command in the package REPL:
+`juliaformat` is a [Julia app](https://pkgdocs.julialang.org/dev/apps/) and requires
+Julia 1.12 or newer. Install it with the `app` command in the package REPL:
 
 ```
-pkg> app add https://github.com/julia-vscode/FormatApp.jl
+pkg> app add FormatApp
 ```
 
-This installs the `juliaformat` executable and makes it available on your
-`PATH`.
+This installs the `juliaformat` executable into `~/.julia/bin`. Make sure that
+directory is on your `PATH`.
 
 ## Usage
 
